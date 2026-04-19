@@ -1,9 +1,9 @@
 import logging
 
-from .order import Order
-from .schedule import Schedule
-from .algorithm import Algorithm
-from .portfolio import Portfolio
+from order import Order
+from schedule import Schedule
+from algorithm import Algorithm
+from portfolio import Portfolio
 
 
 def create_order(schedule: Schedule, current_price: float, previous_price: float):

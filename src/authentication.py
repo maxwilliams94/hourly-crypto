@@ -1,4 +1,4 @@
-from .vault import Auth
+from vault import Auth
 
 
 def generate_jwt(auth: Auth, exchange: str) -> str:

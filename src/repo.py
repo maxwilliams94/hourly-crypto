@@ -4,8 +4,8 @@ import os
 import datetime
 from typing import List
 
-from .schedule import Schedule
-from .price import Price
+from schedule import Schedule
+from price import Price
 
 
 URL = os.environ['ACCOUNT_URI']
@@ -35,13 +35,13 @@ def database_client() -> CosmosClient:
 
 def schedule_client() -> CosmosClient:
     if _schedule_client is None:
-        _schedule_client = database_client.get_container_client(SCHEDULE_CONTAINER)
+        _schedule_client = database_client().get_container_client(SCHEDULE_CONTAINER)
     else:
         return _schedule_client
 
 def price_client() -> CosmosClient:
     if _price_client is None:
-        _price_client = database_client.get_container_client(PRICES_CONTAINER)
+        _price_client = database_client().get_container_client(PRICES_CONTAINER)
     else:
         return _price_client
 

@@ -5,12 +5,12 @@ from typing import List
 
 import azure.functions as func
 
-from .scheduling import get_schedule_keys, is_ready_for_next_execution, Schedule, update_schedule, register_execution
-from .exchange import get_current_price, execute_order, check_exchange_connectivity, get_trade_status
-from .prices import get_previous_price
-from .order import Order
-from .price import Price
-from .decision import create_order
+from scheduling import get_schedule_keys, is_ready_for_next_execution, Schedule, update_schedule, register_execution
+from exchange import get_current_price, execute_order, check_exchange_connectivity, get_trade_status
+from prices import get_previous_price
+from order import Order
+from price import Price
+from decision import create_order
 
 # Configure logging with level from environment variable
 log_level_str = os.getenv('LOG_LEVEL', 'INFO').upper()

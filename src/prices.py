@@ -1,6 +1,6 @@
 
-from .price import Price
-from .repo import persist_price, get_prices
+from price import Price
+from repo import persist_price, get_prices
 
 
 def save_price(price: Price) -> None:

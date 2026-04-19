@@ -17,7 +17,7 @@ class ScheduleValidator:
     """Validates schedule configuration inputs."""
     
     # Valid values for known fields
-    VALID_EXCHANGES = ["coinbase", "kraken"]
+    VALID_EXCHANGES = ["coinbase", "kraken", "test"]
     VALID_SCHEDULES = ["1H", "4H", "1D", "1W", "1M"]
     
     @staticmethod

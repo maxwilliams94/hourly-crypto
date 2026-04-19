@@ -1,10 +1,10 @@
 """
-Determine whether the next schedule has been reached.
+Schedule management and execution timing logic.
 """
 
 from datetime import datetime
 from typing import List
-from .repo import Schedule, get_active_schedules, upsert_schedule
+from repo import Schedule, get_active_schedules, upsert_schedule
 
 
 def get_schedules() -> List[Schedule]:
@@ -42,7 +42,7 @@ def is_ready_for_next_execution(schedule: Schedule, now: datetime) -> bool:
 
 def register_execution(schedule: Schedule, now: datetime) -> None:
     schedule.last_execution = now.isoformat()
-    repo.upsert_schedule(schedule)
+    upsert_schedule(schedule)
 
 def update_schedule(schedule: Schedule) -> None:
-    repo.upsert_schedule(schedule)
+    upsert_schedule(schedule)

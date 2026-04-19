@@ -11,8 +11,8 @@ import time
 import uuid
 from datetime import datetime, timezone
 
-from ..vault import get_auth, VaultEntry
-from ..portfolio import Trade
+from vault import get_auth, VaultEntry
+from portfolio import Trade
 
 
 def format_symbol_for_coinbase(symbol: str) -> str:

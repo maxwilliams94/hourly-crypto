@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
-from .algorithm import Algorithm
-from .portfolio import Portfolio
+from algorithm import Algorithm
+from portfolio import Portfolio
 
 
 @dataclass
