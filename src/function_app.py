@@ -1,7 +1,27 @@
 import datetime
 import logging
+import os
+from typing import List
 
 import azure.functions as func
+
+from .scheduling import get_schedule_keys, is_ready_for_next_execution, Schedule, update_schedule, register_execution
+from .exchange import get_current_price, execute_order, check_exchange_connectivity, get_trade_status
+from .prices import get_previous_price
+from .order import Order
+from .price import Price
+from .decision import create_order
+
+# Configure logging with level from environment variable
+log_level_str = os.getenv('LOG_LEVEL', 'INFO').upper()
+log_level = getattr(logging, log_level_str, logging.INFO)
+
+logging.basicConfig(
+    level=log_level,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+logger.setLevel(log_level)
 
 # Create the function app instance
 app = func.FunctionApp()
@@ -23,8 +43,72 @@ def timer_function(mytimer: func.TimerRequest) -> None:
         in production to avoid unexpected executions during deployments or restarts.
     """
     utc_timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    
     logging.info(f'Python timer trigger function executed at: {utc_timestamp}')
+    logger.debug(f'Timer trigger details - Schedule status: {mytimer.schedule_status}, Past due: {mytimer.past_due}')
+
+    schedules: List[Schedule] = get_schedule_keys()
+    logger.debug(f'Retrieved {len(schedules)} schedules from configuration')
+    now = datetime.datetime.now(datetime.timezone.utc)
+    logger.debug(f'Current UTC time: {now.isoformat()}')
+    checked_exchanges = {}
+    for schedule in schedules:
+        logger.debug(f'Processing schedule for {schedule.asset}/{schedule.quote} on {schedule.exchange}')
+        if schedule.exchange not in checked_exchanges:
+            logging.info(f"Checking exchange: {schedule.exchange}")
+            if check_exchange_connectivity(schedule.exchange):
+                logging.info(f"Successfully connected to exchange: {schedule.exchange}")
+                checked_exchanges[schedule.exchange] = True
+            else:
+                logging.error(f"Failed to connect to exchange: {schedule.exchange}. Skipping schedules for this exchange.")
+                checked_exchanges[schedule.exchange] = False
+                continue
+        else:
+            if not checked_exchanges[schedule.exchange]:
+                logging.error(f"Skipping schedule for exchange: {schedule.exchange} due to previous connectivity failure.")
+                continue
+    
+
+        unfilled_trades = [trade for trade in schedule.portfolio.trades if not trade.is_complete()]
+        logger.debug(f'Found {len(unfilled_trades)} unfilled trades for this schedule')
+        has_updated = False
+        for unfilled_trade in unfilled_trades:
+            changed, updated_trade = get_trade_status(unfilled_trade)
+            logger.debug(f'Trade status check - Changed: {changed}, Trade ID: {unfilled_trade.id}')
+            if changed:
+                logging.info(f"Updated trade status: {updated_trade}")
+                has_updated = True
+
+        if has_updated:
+            update_schedule(schedule)
+            logger.debug(f'Schedule updated due to trade status changes')
+
+        is_ready = is_ready_for_next_execution(schedule, now)
+        logger.debug(f'Schedule ready for execution: {is_ready}')
+        if not is_ready:
+            continue
+        else:
+            logger.info(f"Executing scheduled task for key: {key}")
+            logger.debug(f'Fetching current and previous prices for {schedule.asset}/{schedule.quote}')
+            current_price: Price = get_current_price(schedule.asset, schedule.quote, schedule.exchange)
+            previous_price: Price = get_previous_price(schedule.asset, schedule.quote, schedule.exchange)
+            order: Order = create_order(schedule, current_price, previous_price)
+            logger.debug(f'Order creation result: {order}')
+            if order is not None:
+                logging.info(f"Generated order: {order}")
+                trade: Trade = execute_order(order)
+                logger.debug(f'Trade execution result: {trade}')
+                if trade is not None:
+                    logging.info(f"Executed trade: {trade}")
+                    schedule.portfolio.trades.append(trade)
+            else:
+                logging.info(f"No order generated for schedule: {schedule}")
+                register_execution(schedule, now)
+        if (current_price is not None):
+            logger.debug(f'Persisting price data: {current_price}')
+            persist_price(current_price)
+            
+    logger.debug('Schedule processing loop completed')
     
     if mytimer.past_due:
         logging.warning('The timer is running late!')
+        logger.debug(f'Timer was {mytimer.past_due} seconds late')

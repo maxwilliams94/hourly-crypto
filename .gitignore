@@ -625,3 +625,8 @@ FodyWeavers.xsd
 *.msm
 *.msp
 .azure
+
+src/local.settings.json
+
+# MacOS
+.DS_Store
