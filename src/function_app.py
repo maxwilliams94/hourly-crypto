@@ -5,7 +5,7 @@ from typing import List
 
 import azure.functions as func
 
-from scheduling import get_schedule_keys, is_ready_for_next_execution, Schedule, update_schedule, register_execution
+from scheduling import get_schedules, is_ready_for_next_execution, Schedule, update_schedule, register_execution
 from exchange import get_current_price, execute_order, check_exchange_connectivity, get_trade_status
 from prices import get_previous_price
 from order import Order
@@ -27,15 +27,15 @@ logger.setLevel(log_level)
 app = func.FunctionApp()
 
 @app.timer_trigger(schedule="%TIMER_SCHEDULE%", 
-                   arg_name="crypto-hourly", 
+                   arg_name="execution_timer", 
                    run_on_startup=True,
                    use_monitor=True) 
-def timer_function(mytimer: func.TimerRequest) -> None:
+def timer_function(execution_timer: func.TimerRequest) -> None:
     """
     Timer-triggered function that executes on a schedule defined by TIMER_SCHEDULE app setting.
     
     Args:
-        mytimer: Timer information including schedule status
+        execution_timer: Timer information including schedule status
     
     Notes:
         The run_on_startup=True parameter is useful for development and testing as it triggers
@@ -44,9 +44,9 @@ def timer_function(mytimer: func.TimerRequest) -> None:
     """
     utc_timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
     logging.info(f'Python timer trigger function executed at: {utc_timestamp}')
-    logger.debug(f'Timer trigger details - Schedule status: {mytimer.schedule_status}, Past due: {mytimer.past_due}')
+    logger.debug(f'Timer trigger details - Schedule status: {execution_timer.schedule_status}, Past due: {execution_timer.past_due}')
 
-    schedules: List[Schedule] = get_schedule_keys()
+    schedules: List[Schedule] = get_schedules()
     logger.debug(f'Retrieved {len(schedules)} schedules from configuration')
     now = datetime.datetime.now(datetime.timezone.utc)
     logger.debug(f'Current UTC time: {now.isoformat()}')
@@ -109,6 +109,6 @@ def timer_function(mytimer: func.TimerRequest) -> None:
             
     logger.debug('Schedule processing loop completed')
     
-    if mytimer.past_due:
+    if execution_timer.past_due:
         logging.warning('The timer is running late!')
-        logger.debug(f'Timer was {mytimer.past_due} seconds late')
+        logger.debug(f'Timer was {execution_timer.past_due} seconds late')

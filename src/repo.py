@@ -1,4 +1,4 @@
-from azure.cosmos import CosmosClient
+from azure.cosmos import CosmosClient, DatabaseProxy, ContainerProxy
 
 import os
 import datetime
@@ -15,41 +15,41 @@ SCHEDULE_CONTAINER = "schedule"
 PRICES_CONTAINER = "price"
 
 _client: CosmosClient = None
-_database_client: CosmosClient = None
-_schedule_client: CosmosClient = None
-_price_client: CosmosClient = None
+_database_client: DatabaseProxy = None
+_schedule_client: ContainerProxy = None
+_price_client: ContainerProxy = None
 
 
 def client() -> CosmosClient:
+    global _client
     if _client is None:
         _client = CosmosClient(URL, credential=KEY)
-    else:
-        return _client
+    return _client
 
 
 def database_client() -> CosmosClient:
+    global _database_client
     if _database_client is None:
         _database_client = client().get_database_client(DATABASE_NAME)
-    else:
-        return _database_client
+    return _database_client
 
 def schedule_client() -> CosmosClient:
+    global _schedule_client
     if _schedule_client is None:
         _schedule_client = database_client().get_container_client(SCHEDULE_CONTAINER)
-    else:
-        return _schedule_client
+    return _schedule_client
 
 def price_client() -> CosmosClient:
+    global _price_client
     if _price_client is None:
         _price_client = database_client().get_container_client(PRICES_CONTAINER)
-    else:
-        return _price_client
+    return _price_client
 
 
 def get_active_schedules() -> List[Schedule]:
-    return schedule_client().query_items(
+    return [Schedule(**item) for item in schedule_client().query_items(
         query="SELECT * FROM c WHERE c.active = true",
-        enable_cross_partition_query=True)
+        enable_cross_partition_query=True)]
 
 
 def upsert_schedule(schedule: Schedule) -> None:
@@ -65,7 +65,7 @@ def get_prices(asset: str, quote: str, schedule: str, exchange: str, max_items: 
         query="SELECT * FROM c WHERE c.asset = @asset AND c.quote = @quote AND c.active = true AND c.schedule = @schedule AND c.exchange = @exchange ORDER BY c.timestamp DESC"
     else: 
         query=f"SELECT TOP {max_items} * FROM c WHERE c.asset = @asset AND c.quote = @quote AND c.active = true AND c.schedule = @schedule AND c.exchange = @exchange ORDER BY c.timestamp DESC"
-    return price_client().query_items(
+    return [Price(**price) for price in price_client().query_items(
         query=query,
         parameters=[
             {"name": "@asset", "value": asset},
@@ -73,4 +73,4 @@ def get_prices(asset: str, quote: str, schedule: str, exchange: str, max_items: 
             {"name": "@schedule", "value": schedule},
             {"name": "@exchange", "value": exchange}
         ],
-        enable_cross_partition_query=True)
+        enable_cross_partition_query=True)]
