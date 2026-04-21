@@ -7,8 +7,9 @@ import azure.functions as func
 
 from scheduling import get_schedules, is_ready_for_next_execution, Schedule, update_schedule, register_execution
 from exchange import get_current_price, execute_order, check_exchange_connectivity, get_trade_status
-from prices import get_previous_price
+from prices import get_previous_price, save_price
 from order import Order
+from portfolio import Trade
 from price import Price
 from decision import create_order
 
@@ -68,7 +69,7 @@ def timer_function(execution_timer: func.TimerRequest) -> None:
                 continue
     
 
-        unfilled_trades = [trade for trade in schedule.portfolio.trades if not trade.is_complete()]
+        unfilled_trades = [trade for trade in schedule.portfolio.trades if not trade.is_complete()] if schedule.portfolio else []
         logger.debug(f'Found {len(unfilled_trades)} unfilled trades for this schedule')
         has_updated = False
         for unfilled_trade in unfilled_trades:
@@ -87,10 +88,10 @@ def timer_function(execution_timer: func.TimerRequest) -> None:
         if not is_ready:
             continue
         else:
-            logger.info(f"Executing scheduled task for key: {key}")
+            logger.info(f"Executing scheduled task for schedule: {schedule.id}")
             logger.debug(f'Fetching current and previous prices for {schedule.asset}/{schedule.quote}')
             current_price: Price = get_current_price(schedule.asset, schedule.quote, schedule.exchange)
-            previous_price: Price = get_previous_price(schedule.asset, schedule.quote, schedule.exchange)
+            previous_price: Price = get_previous_price(schedule.asset, schedule.quote, schedule.schedule, schedule.exchange)
             order: Order = create_order(schedule, current_price, previous_price)
             logger.debug(f'Order creation result: {order}')
             if order is not None:
@@ -104,8 +105,9 @@ def timer_function(execution_timer: func.TimerRequest) -> None:
                 logging.info(f"No order generated for schedule: {schedule}")
                 register_execution(schedule, now)
         if (current_price is not None):
+            current_price.schedule = schedule.schedule
             logger.debug(f'Persisting price data: {current_price}')
-            persist_price(current_price)
+            save_price(current_price)
             
     logger.debug('Schedule processing loop completed')
     

@@ -37,6 +37,7 @@ def make_order(**overrides) -> Order:
 
 def make_trade(**overrides) -> Trade:
     defaults = dict(
+        id="trade-1",
         exchange_id="order-abc123",
         asset="BTC",
         quote="USD",
@@ -75,6 +76,7 @@ class TestGetCurrentPrice:
 
     def test_coinbase_exchange_delegates_to_coinbase_module(self):
         mock_price = Price(
+            id="price-1",
             asset="BTC", quote="USD", exchange="coinbase",
             price=50000.0, schedule="1H",
             timestamp="2024-01-01T00:00:00", active=True,

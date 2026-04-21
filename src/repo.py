@@ -1,4 +1,6 @@
+import logging
 from azure.cosmos import CosmosClient, DatabaseProxy, ContainerProxy
+from uuid import uuid4
 
 import os
 import datetime
@@ -47,24 +49,30 @@ def price_client() -> CosmosClient:
 
 
 def get_active_schedules() -> List[Schedule]:
-    return [Schedule(**item) for item in schedule_client().query_items(
-        query="SELECT * FROM c WHERE c.active = true",
+    return [Schedule.from_dict(item) for item in schedule_client().query_items(
+        query="SELECT * FROM c WHERE c.active = 'true'",
         enable_cross_partition_query=True)]
 
 
 def upsert_schedule(schedule: Schedule) -> None:
+    logging.debug(f'Upserting schedule: {schedule}')
+    if schedule.id is None:
+        schedule.id = str(uuid4())
     schedule_client().upsert_item(schedule.__dict__)
 
 
 def persist_price(price: Price) -> None:
-    price_client().insert_item(price.__dict__)
+    logging.debug(f'Persisting price: {price}')
+    if price.id is None:
+        price.id = str(uuid4())
+    price_client().upsert_item(price.__dict__)
 
 
 def get_prices(asset: str, quote: str, schedule: str, exchange: str, max_items: int = None) -> List[Price]:
     if max_items is None:
-        query="SELECT * FROM c WHERE c.asset = @asset AND c.quote = @quote AND c.active = true AND c.schedule = @schedule AND c.exchange = @exchange ORDER BY c.timestamp DESC"
+        query="SELECT * FROM c WHERE c.asset = @asset AND c.quote = @quote AND c.active = 'true' AND c.schedule = @schedule AND c.exchange = @exchange ORDER BY c.timestamp DESC"
     else: 
-        query=f"SELECT TOP {max_items} * FROM c WHERE c.asset = @asset AND c.quote = @quote AND c.active = true AND c.schedule = @schedule AND c.exchange = @exchange ORDER BY c.timestamp DESC"
+        query=f"SELECT TOP {max_items} * FROM c WHERE c.asset = @asset AND c.quote = @quote AND c.active = 'true' AND c.schedule = @schedule AND c.exchange = @exchange ORDER BY c.timestamp DESC"
     return [Price(**price) for price in price_client().query_items(
         query=query,
         parameters=[

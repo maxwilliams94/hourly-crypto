@@ -8,6 +8,7 @@ from portfolio import Trade, Portfolio
 
 def make_trade(**overrides) -> Trade:
     defaults = dict(
+        id="trade-1",
         exchange_id="order-abc123",
         asset="BTC",
         quote="USD",

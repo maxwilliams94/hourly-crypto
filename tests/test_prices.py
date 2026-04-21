@@ -13,6 +13,7 @@ import prices as prices_module
 
 def make_price(**overrides) -> Price:
     defaults = dict(
+        id="price-1",
         asset="BTC",
         quote="USD",
         exchange="test",
