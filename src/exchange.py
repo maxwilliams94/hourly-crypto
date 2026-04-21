@@ -20,6 +20,7 @@ def get_current_price(asset: str, quote: str, exchange: str) -> Price:
     elif exchange == "test":
         return Price(asset=asset, quote=quote, exchange=exchange, price=float(randint(1,1000)), schedule=None, timestamp=datetime.datetime.now().isoformat(), active=True)
     else:
+        logging.warning(f"Unknown exchange '{exchange}' for price retrieval. Returning None.")
         return None
 
 

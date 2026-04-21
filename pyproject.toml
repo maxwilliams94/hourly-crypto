@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "crypto-hourly-exchanges"
+version = "0.1.0"
+description = "Exchange authentication helpers for the crypto-hourly Azure Functions app."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "PyJWT",
+  "cryptography",
+  "requests",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+]
+
+[tool.setuptools]
+packages = ["exchanges"]
+
+[tool.setuptools.package-dir]
+exchanges = "."
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "src"
+]
+

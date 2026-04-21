@@ -8,10 +8,10 @@ import datetime
 import pytest
 from unittest.mock import patch, MagicMock
 
-from src.order import Order
-from src.portfolio import Trade
-from src.price import Price
-from src import exchange as exchange_module
+from order import Order
+from portfolio import Trade
+from price import Price
+import exchange as exchange_module
 
 
 # ---------------------------------------------------------------------------
@@ -79,7 +79,7 @@ class TestGetCurrentPrice:
             price=50000.0, schedule="1H",
             timestamp="2024-01-01T00:00:00", active=True,
         )
-        with patch("src.exchange.cb_get_current_price", return_value=mock_price) as mock_cb:
+        with patch("exchange.cb_get_current_price", return_value=mock_price) as mock_cb:
             result = exchange_module.get_current_price("BTC", "USD", "coinbase")
             mock_cb.assert_called_once_with("BTC", "USD")
             assert result == mock_price
@@ -97,11 +97,11 @@ class TestCheckExchangeConnectivity:
         assert exchange_module.check_exchange_connectivity("kraken") is False
 
     def test_coinbase_connected_when_accounts_returned(self):
-        with patch("src.exchange.cb_verify_connection", return_value=["account-1"]):
+        with patch("exchange.cb_verify_connection", return_value=["account-1"]):
             assert exchange_module.check_exchange_connectivity("coinbase") is True
 
     def test_coinbase_not_connected_when_no_accounts(self):
-        with patch("src.exchange.cb_verify_connection", return_value=[]):
+        with patch("exchange.cb_verify_connection", return_value=[]):
             assert exchange_module.check_exchange_connectivity("coinbase") is False
 
 
@@ -135,13 +135,13 @@ class TestDryTrading:
 class TestExecuteOrder:
     def test_returns_dry_trade_when_dry_trading_enabled(self):
         order = make_order(execution_active=True)
-        with patch("src.exchange.dry_trading", return_value=True):
+        with patch("exchange.dry_trading", return_value=True):
             result = exchange_module.execute_order(order)
         assert result is not None
 
     def test_returns_dry_trade_when_execution_not_active(self):
         order = make_order(execution_active=False)
-        with patch("src.exchange.dry_trading", return_value=False):
+        with patch("exchange.dry_trading", return_value=False):
             result = exchange_module.execute_order(order)
         assert result is not None
 
@@ -150,8 +150,8 @@ class TestExecuteOrder:
         # We need to set order.exchange since Order dataclass doesn't have it
         order.exchange = "coinbase"
         mock_trade = make_trade(status="open")
-        with patch("src.exchange.dry_trading", return_value=False), \
-             patch("src.exchange.cb_place_order", return_value=mock_trade) as mock_place:
+        with patch("exchange.dry_trading", return_value=False), \
+             patch("exchange.cb_place_order", return_value=mock_trade) as mock_place:
             result = exchange_module.execute_order(order)
             mock_place.assert_called_once_with(order)
             assert result == mock_trade
@@ -181,7 +181,7 @@ class TestGetTradeStatus:
 
     def test_coinbase_exchange_delegates_to_coinbase_module(self):
         trade = make_trade(exchange="coinbase", status="open")
-        with patch("src.exchange.cb_get_order_status", return_value="filled") as mock_cb:
+        with patch("exchange.cb_get_order_status", return_value="filled") as mock_cb:
             changed, updated = exchange_module.get_trade_status(trade)
             mock_cb.assert_called_once()
             assert updated.status == "filled"
