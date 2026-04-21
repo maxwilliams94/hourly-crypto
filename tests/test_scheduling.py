@@ -1,5 +1,5 @@
 """
-Unit tests for src/scheduling.py.
+Unit tests for scheduling.py.
 
 is_ready_for_next_execution() is pure logic with no external I/O, so it is
 tested exhaustively.  get_schedules(), register_execution() and
@@ -10,10 +10,10 @@ import pytest
 from datetime import datetime
 from unittest.mock import patch, MagicMock
 
-from src.scheduling import is_ready_for_next_execution, get_schedules
-from src.schedule import Schedule
-from src.algorithm import Algorithm
-from src.portfolio import Portfolio
+from scheduling import is_ready_for_next_execution, get_schedules
+from schedule import Schedule
+from algorithm import Algorithm
+from portfolio import Portfolio
 
 
 # ---------------------------------------------------------------------------
@@ -189,7 +189,7 @@ class TestIsReadyWithLastExecution:
 class TestGetSchedules:
     def test_delegates_to_get_active_schedules(self):
         mock_schedules = [MagicMock(), MagicMock()]
-        with patch("src.scheduling.get_active_schedules", return_value=mock_schedules) as mock_fn:
+        with patch("scheduling.get_active_schedules", return_value=mock_schedules) as mock_fn:
             result = get_schedules()
             mock_fn.assert_called_once()
             assert result == mock_schedules

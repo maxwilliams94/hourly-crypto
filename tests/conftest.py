@@ -2,7 +2,7 @@
 Shared pytest configuration and fixtures.
 
 Sets up mocks for all external integrations (Azure, Cosmos DB, Key Vault,
-Coinbase, Kraken) before any src modules are imported.
+Coinbase, Kraken) 
 """
 
 import os
@@ -10,7 +10,7 @@ import sys
 from unittest.mock import MagicMock
 
 # ---------------------------------------------------------------------------
-# Inject environment variables required by src/repo.py at import time
+# Inject environment variables required by repo.py at import time
 # ---------------------------------------------------------------------------
 os.environ.setdefault("ACCOUNT_URI", "https://mock-cosmos.documents.azure.com:443/")
 os.environ.setdefault("ACCOUNT_KEY", "mock-key==")
@@ -38,10 +38,3 @@ for _mod in [
     "azure.identity",
 ]:
     sys.modules[_mod] = _azure_mock
-
-# ---------------------------------------------------------------------------
-# Add the project root to sys.path so `import src.xxx` works
-# ---------------------------------------------------------------------------
-_project_root = os.path.dirname(os.path.dirname(__file__))
-if _project_root not in sys.path:
-    sys.path.insert(0, _project_root)

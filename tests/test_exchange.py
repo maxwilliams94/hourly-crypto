@@ -1,5 +1,5 @@
 """
-Unit tests for src/exchange.py.
+Unit tests for exchange.py.
 
 All external integrations (Coinbase SDK, environment variables) are mocked.
 """

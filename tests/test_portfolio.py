@@ -1,9 +1,9 @@
 """
-Unit tests for the Portfolio and Trade dataclasses (src/portfolio.py).
+Unit tests for the Portfolio and Trade dataclasses (portfolio.py).
 """
 
 import pytest
-from src.portfolio import Trade, Portfolio
+from portfolio import Trade, Portfolio
 
 
 def make_trade(**overrides) -> Trade:

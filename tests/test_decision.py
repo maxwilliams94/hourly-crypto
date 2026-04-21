@@ -1,15 +1,15 @@
 """
-Unit tests for create_order() in src/decision.py.
+Unit tests for create_order() in decision.py.
 """
 
 import pytest
 from unittest.mock import MagicMock
 
-from src.algorithm import Algorithm
-from src.portfolio import Portfolio, Trade
-from src.schedule import Schedule
-from src.order import Order
-from src.decision import create_order
+from algorithm import Algorithm
+from portfolio import Portfolio, Trade
+from schedule import Schedule
+from order import Order
+from decision import create_order
 
 
 def make_algorithm(**overrides) -> Algorithm:
