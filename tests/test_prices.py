@@ -5,6 +5,7 @@ All Cosmos DB calls are mocked via repo.
 """
 
 import pytest
+from datetime import datetime, timezone, timedelta
 from unittest.mock import patch, MagicMock
 
 from price import Price
@@ -12,6 +13,7 @@ import prices as prices_module
 
 
 def make_price(**overrides) -> Price:
+    recent_ts = (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat()
     defaults = dict(
         id="price-1",
         asset="BTC",
@@ -19,7 +21,7 @@ def make_price(**overrides) -> Price:
         exchange="test",
         price=50000.0,
         schedule="1H",
-        timestamp="2024-01-01T00:00:00",
+        timestamp=recent_ts,
         active=True,
     )
     defaults.update(overrides)
@@ -59,3 +61,43 @@ class TestGetPreviousPrice:
         with patch("prices.get_prices", return_value=[]) as mock_get:
             prices_module.get_previous_price("ETH", "GBP", "4H", "coinbase")
             mock_get.assert_called_once_with("ETH", "GBP", "4H", "coinbase", 1)
+
+    def test_returns_none_and_warns_when_price_is_stale(self):
+        stale_ts = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        stale_price = make_price(timestamp=stale_ts)
+        with patch("prices.get_prices", return_value=[stale_price]):
+            with patch("prices.logging") as mock_log:
+                result = prices_module.get_previous_price("BTC", "USD", "1H", "test")
+                assert result is None
+                mock_log.warning.assert_called_once()
+
+    def test_returns_price_just_within_tolerance(self):
+        # 1H * 1.1 = 66 minutes; 65 minutes ago is within tolerance
+        fresh_ts = (datetime.now(timezone.utc) - timedelta(minutes=65)).isoformat()
+        fresh_price = make_price(timestamp=fresh_ts)
+        with patch("prices.get_prices", return_value=[fresh_price]):
+            result = prices_module.get_previous_price("BTC", "USD", "1H", "test")
+            assert result == fresh_price
+
+    def test_returns_none_just_outside_tolerance(self):
+        # 1H * 1.1 = 66 minutes; 67 minutes ago exceeds tolerance
+        stale_ts = (datetime.now(timezone.utc) - timedelta(minutes=67)).isoformat()
+        stale_price = make_price(timestamp=stale_ts)
+        with patch("prices.get_prices", return_value=[stale_price]):
+            result = prices_module.get_previous_price("BTC", "USD", "1H", "test")
+            assert result is None
+
+    def test_skips_staleness_check_for_unknown_schedule(self):
+        old_ts = (datetime.now(timezone.utc) - timedelta(days=365)).isoformat()
+        price = make_price(timestamp=old_ts, schedule="CUSTOM")
+        with patch("prices.get_prices", return_value=[price]):
+            result = prices_module.get_previous_price("BTC", "USD", "CUSTOM", "test")
+            assert result == price
+
+    def test_returns_none_and_warns_when_timestamp_is_none(self):
+        price = make_price(timestamp=None)
+        with patch("prices.get_prices", return_value=[price]):
+            with patch("prices.logging") as mock_log:
+                result = prices_module.get_previous_price("BTC", "USD", "1H", "test")
+                assert result is None
+                mock_log.warning.assert_called_once()

@@ -13,16 +13,14 @@ from portfolio import Trade
 from price import Price
 from decision import create_order
 
-# Configure logging with level from environment variable
+# Configure logging
 log_level_str = os.getenv('LOG_LEVEL', 'INFO').upper()
 log_level = getattr(logging, log_level_str, logging.INFO)
 
-logging.basicConfig(
-    level=log_level,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=log_level)
 logger = logging.getLogger(__name__)
 logger.setLevel(log_level)
+
 
 # Create the function app instance
 app = func.FunctionApp()
@@ -92,6 +90,14 @@ def timer_function(execution_timer: func.TimerRequest) -> None:
             logger.debug(f'Fetching current and previous prices for {schedule.asset}/{schedule.quote}')
             current_price: Price = get_current_price(schedule.asset, schedule.quote, schedule.exchange)
             previous_price: Price = get_previous_price(schedule.asset, schedule.quote, schedule.schedule, schedule.exchange)
+            if schedule.algorithm is not None:
+                is_valid, _ = schedule.algorithm.validate()
+                if not is_valid:
+                    logging.error(f"Skipping order creation for schedule {schedule.id}: algorithm '{schedule.algorithm.name}' is misconfigured.")
+                    if current_price is not None:
+                        current_price.schedule = schedule.schedule
+                        save_price(current_price)
+                    continue
             order: Order = create_order(schedule, current_price, previous_price)
             logger.debug(f'Order creation result: {order}')
             if order is not None:
