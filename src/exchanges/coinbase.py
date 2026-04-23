@@ -484,10 +484,54 @@ def place_order(
         last_updated=now,
     )
 
+def map_coinbase_status_to_standard(coinbase_status: str) -> str:
+    """
+    Map Coinbase order status to standardized Trade status.
+    
+    Coinbase statuses:
+    - PENDING: Order placed but not yet in order book
+    - OPEN: Order is in the order book, not yet filled
+    - FILLED: Order completely filled
+    - CANCELLED: Order cancelled by user or system
+    - FAILED: Order failed to be placed
+    - EXPIRED: Order expired (e.g., time limit exceeded)
+    
+    Standardized Trade statuses:
+    - "pending": Initial state, waiting to be accepted
+    - "open": Actively in the order book
+    - "filled": Order completed successfully
+    - "cancelled": Order cancelled
+    - "rejected": Order failed or was rejected
+    
+    Args:
+        coinbase_status: Status from Coinbase API
+        
+    Returns:
+        Standardized Trade status string
+    """
+    status_map = {
+        "PENDING": "pending",
+        "OPEN": "open",
+        "FILLED": "filled",
+        "CANCELLED": "cancelled",
+        "FAILED": "rejected",
+        "EXPIRED": "rejected"
+    }
+    
+    # Normalize input (uppercase to handle case variations)
+    normalized_status = coinbase_status.upper().strip() if coinbase_status else ""
+    
+    # Get mapped status, default to "pending" for unknown statuses
+    standard_status = status_map.get(normalized_status, "pending")
+    
+    logging.debug(f"Mapped Coinbase status '{coinbase_status}' to standard status '{standard_status}'")
+    return standard_status
+
+
 def get_order_status(
     order_id: str,
     api_base_url: Optional[str] = None
-) -> Dict[str, Any]:
+) -> str:
     """
     Get the status of an order from Coinbase API using its order ID.
     
@@ -496,7 +540,7 @@ def get_order_status(
         api_base_url: Override default API base URL (for testing)
         
     Returns:
-        Dictionary containing order details and status
+        Standardized Trade status string (pending, open, filled, cancelled, or rejected)
         
     Raises:
         ValueError: If order_id is invalid
@@ -535,15 +579,18 @@ def get_order_status(
     # Extract key order information for logging
     order_id_resp = order.get("order", {}).get("order_id", order_id)
     product_id = order.get("order", {}).get("product_id", "UNKNOWN")
-    status = order.get("order", {}).get("status", "UNKNOWN")
+    coinbase_status = order.get("order", {}).get("status", "UNKNOWN")
     side = order.get("order", {}).get("side", "UNKNOWN")
     filled_size = order.get("order", {}).get("filled_size", "0")
     
-    logging.info(f"Order status - ID: {order_id_resp}, Product: {product_id}, Status: {status}, "
+    logging.info(f"Order status - ID: {order_id_resp}, Product: {product_id}, Coinbase Status: {coinbase_status}, "
                 f"Side: {side}, Filled Size: {filled_size}")
     logging.debug(f"Full order response: {json.dumps(order, indent=2)}")
     
-    return order
+    # Map Coinbase status to standardized status
+    standard_status = map_coinbase_status_to_standard(coinbase_status)
+    
+    return standard_status
 
 
 def get_current_price(
