@@ -49,6 +49,15 @@ def timer_function(execution_timer: func.TimerRequest) -> None:
     logger.debug(f'Retrieved {len(schedules)} schedules from configuration')
     now = datetime.datetime.now(datetime.timezone.utc)
     logger.debug(f'Current UTC time: {now.isoformat()}')
+
+    def persist_current_price(schedule: Schedule, current_price: Price) -> None:
+        if current_price is None:
+            return
+
+        current_price.schedule = schedule.schedule
+        logger.debug(f'Persisting price data: {current_price}')
+        save_price(current_price)
+
     checked_exchanges = {}
     for schedule in schedules:
         logger.debug(f'Processing schedule for {schedule.asset}/{schedule.quote} on {schedule.exchange}')
@@ -111,10 +120,12 @@ def timer_function(execution_timer: func.TimerRequest) -> None:
                 is_valid, _ = schedule.algorithm.validate()
                 if not is_valid:
                     logging.error(f"Skipping order creation for schedule {schedule.id}: algorithm '{schedule.algorithm.name}' is misconfigured.")
-                    if current_price is not None:
-                        current_price.schedule = schedule.schedule
-                        save_price(current_price)
+                    persist_current_price(schedule, current_price)
                     continue
+            if current_price is None or previous_price is None:
+                logging.warning(f"Skipping order creation for schedule {schedule.id}: missing price data (current={current_price}, previous={previous_price}).")
+                persist_current_price(schedule, current_price)
+                continue
             order: Order = create_order(schedule, current_price.price, previous_price.price)
             logger.debug(f'Order creation result: {order}')
             if order is not None:
@@ -125,10 +136,7 @@ def timer_function(execution_timer: func.TimerRequest) -> None:
                     schedule.portfolio.trades.append(trade)
             else:
                 logging.info(f"No order generated for schedule: {schedule}")
-        if (current_price is not None):
-            current_price.schedule = schedule.schedule
-            logger.debug(f'Persisting price data: {current_price}')
-            save_price(current_price)
+        persist_current_price(schedule, current_price)
     
         logging.debug(f'Updating last execution time for schedule: {schedule.id}')
         register_execution(schedule, now)

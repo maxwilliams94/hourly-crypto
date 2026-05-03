@@ -53,7 +53,11 @@ def update_trade(trade: Trade) -> Tuple[bool, Trade]:
                 new_fee = None
     elif trade.exchange == "test":
         new_status = "filled"
+        # Calculate 1% fee on fill for test exchange (only when transitioning to filled)
         new_fee = trade.fee
+        if new_status == "filled" and trade.status != "filled" and trade.fee is None:
+            # 1% fee on the trade cost (amount * price) - apply only on first fill
+            new_fee = trade.amount * trade.price * 0.01
     else:
         new_status = None
         new_fee = trade.fee
@@ -89,7 +93,7 @@ def execute_order(order: Order) -> Trade:
             fee=None,
         )
         logging.info("Simulated trade: {}".format(would_be_trade))
-        return None
+        return would_be_trade
     if order.exchange == "coinbase":
         return cb_place_order(order)
     elif order.exchange == "test":

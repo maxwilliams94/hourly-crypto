@@ -9,7 +9,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 from order import Order
-from portfolio import Trade
+from portfolio import Trade, Portfolio, update_portfolio_trades
 from price import Price
 import exchange as exchange_module
 
@@ -171,6 +171,26 @@ class TestUpdateTrade:
         assert updated.status == "filled"
         assert changed is True
 
+    def test_test_exchange_calculates_1_percent_fee_on_fill(self):
+        """When test exchange transitions to filled, apply 1% fee."""
+        # 0.01 BTC @ 50,000 = $500 trade cost
+        # 1% fee = $5
+        trade = make_trade(exchange="test", status="open", amount=0.01, price=50000.0, fee=None)
+        changed, updated = exchange_module.update_trade(trade)
+        assert updated.status == "filled"
+        expected_fee = 0.01 * 50000.0 * 0.01  # amount * price * 1%
+        assert updated.fee == pytest.approx(expected_fee)
+        assert changed is True
+
+    def test_test_exchange_preserves_explicit_fee(self):
+        """If fee is already set, don't recalculate for test exchange."""
+        trade = make_trade(exchange="test", status="open", amount=0.01, price=50000.0, fee=10.0)
+        changed, updated = exchange_module.update_trade(trade)
+        assert updated.status == "filled"
+        assert updated.fee == 10.0  # Preserve explicit fee
+        # Changed because status changed (fee didn't)
+        assert changed is True
+
     def test_no_change_when_already_filled(self):
         trade = make_trade(exchange="test", status="filled")
         changed, updated = exchange_module.update_trade(trade)
@@ -201,5 +221,113 @@ class TestUpdateTrade:
     def test_fee_updated_from_exchange_details(self):
         trade = make_trade(exchange="test", status="open", fee=None)
         changed, updated = exchange_module.update_trade(trade)
-        # For test exchange, fee remains None
-        assert updated.fee is None
+        # For test exchange on first fill, fee is calculated as 1%
+        expected_fee = trade.amount * trade.price * 0.01
+        assert updated.fee == pytest.approx(expected_fee)
+
+
+# ---------------------------------------------------------------------------
+# Integration: update_trade + portfolio update
+# ---------------------------------------------------------------------------
+
+class TestExchangePortfolioIntegration:
+    """Verify that exchange fees flow correctly into portfolio updates."""
+
+    def test_test_exchange_fill_fee_flows_to_portfolio(self):
+        """
+        Test exchange buy: 1 BTC @ 40,000
+        - Trade cost: 40,000
+        - Fee (1%): 400
+        - Total fiat deducted: 40,400
+        
+        Portfolio should reflect: 1 BTC at 40,000 cost basis, quote reduced by 40,400
+        """
+        # Start with pending trade (no fee yet)
+        pending_trade = Trade(
+            id="t1",
+            exchange_id="test-1",
+            asset="BTC",
+            quote="USD",
+            amount=1.0,
+            price=40000.0,
+            direction="buy",
+            exchange="test",
+            timestamp="2024-01-01T00:00:00",
+            status="pending",
+            last_updated="2024-01-01T00:00:00",
+            fee=None,
+        )
+        
+        # Update trade to filled (should calculate 1% fee)
+        changed, filled_trade = exchange_module.update_trade(pending_trade)
+        assert changed is True
+        assert filled_trade.status == "filled"
+        assert filled_trade.fee == pytest.approx(400.0)  # 1% of 40,000
+        
+        # Create portfolio with this filled trade
+        portfolio = Portfolio(
+            asset="BTC",
+            quote="USD",
+            exchange="test",
+            initial_asset_amount=0.0,
+            initial_cost_basis=0.0,
+            initial_quote_amount=50000.0,  # $50k starting budget
+            trades=[filled_trade],
+            current_cost_basis=0.0,
+            current_asset_amount=0.0,
+            current_quote_amount=50000.0,
+            cost_basis_value=0.0,
+            market_value=0.0,
+            last_updated=None,
+        )
+        
+        # Update portfolio with the filled trade
+        updated = update_portfolio_trades(portfolio)
+        assert updated is True
+        
+        # Verify portfolio state: 1 BTC cost basis 40k, quote reduced by 40k + 400 fee
+        assert portfolio.current_asset_amount == pytest.approx(1.0)
+        assert portfolio.current_cost_basis == pytest.approx(40000.0)
+        assert portfolio.current_quote_amount == pytest.approx(50000.0 - 40000.0 - 400.0)  # 9,600
+
+    def test_test_exchange_multiple_fills_with_fees(self):
+        """
+        Verify multiple test exchange fills each with 1% fee.
+        Buy 1 BTC @ 40k (fee: 400) → Buy 0.5 BTC @ 50k (fee: 250)
+        """
+        t1 = Trade(
+            id="t1", exchange_id="test-1", asset="BTC", quote="USD",
+            amount=1.0, price=40000.0, direction="buy", exchange="test",
+            timestamp="2024-01-01T10:00:00", status="filled", 
+            last_updated="2024-01-01T10:00:00", fee=400.0,
+        )
+        t2 = Trade(
+            id="t2", exchange_id="test-2", asset="BTC", quote="USD",
+            amount=0.5, price=50000.0, direction="buy", exchange="test",
+            timestamp="2024-01-01T11:00:00", status="pending",
+            last_updated="2024-01-01T11:00:00", fee=None,
+        )
+        
+        # Update t2 to filled
+        _, filled_t2 = exchange_module.update_trade(t2)
+        assert filled_t2.fee == pytest.approx(250.0)  # 1% of 25,000
+        
+        # Portfolio with both trades
+        portfolio = Portfolio(
+            asset="BTC", quote="USD", exchange="test",
+            initial_asset_amount=0.0, initial_cost_basis=0.0,
+            initial_quote_amount=100000.0,
+            trades=[t1, filled_t2],
+            current_cost_basis=0.0, current_asset_amount=0.0,
+            current_quote_amount=100000.0,
+            cost_basis_value=0.0, market_value=0.0, last_updated=None,
+        )
+        
+        update_portfolio_trades(portfolio)
+        
+        # Verify: 1.5 BTC, avg cost = (40000 + 25000) / 1.5 ≈ 43,333.33
+        # Quote: 100k - 40k - 400 - 25k - 250 = 34,350
+        assert portfolio.current_asset_amount == pytest.approx(1.5)
+        expected_avg_cost = (40000.0 + 25000.0) / 1.5
+        assert portfolio.current_cost_basis == pytest.approx(expected_avg_cost)
+        assert portfolio.current_quote_amount == pytest.approx(100000.0 - 40000.0 - 400.0 - 25000.0 - 250.0)
