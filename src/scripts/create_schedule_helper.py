@@ -153,12 +153,12 @@ class ScheduleCreator:
         buy_threshold = self.get_validated_input(
             "Enter buy threshold percentage",
             self.validator.validate_float,
-            default="1.0"
+            default="-1.0"
         )
         sell_threshold = self.get_validated_input(
             "Enter sell threshold percentage",
             self.validator.validate_float,
-            default="-1.0"
+            default="1.0"
         )
         sell_below_cost_basis = self.get_validated_input(
             "Allow selling below cost basis? (true/false)",
@@ -226,41 +226,33 @@ class ScheduleCreator:
     def build_portfolio(self, asset: str, quote: str, exchange: str) -> Dict[str, Any]:
         """Collect portfolio values required by strategy execution."""
         print("Portfolio values are used when creating buy/sell orders.")
+        initial_asset_amount = self.get_validated_input(
+            "Enter initial asset amount",
+            self.validator.validate_non_negative_float,
+            default="0.0"
+        )
+        initial_cost_basis = self.get_validated_input(
+            "Enter initial cost basis",
+            self.validator.validate_non_negative_float,
+            default="0.0"
+        )
+        current_quote_amount = self.get_validated_input(
+            "Enter current quote amount",
+            self.validator.validate_non_negative_float,
+            default="0.0"
+        )
+        
         portfolio = {
             "asset": asset,
             "quote": quote,
             "exchange": exchange,
-            "initial_asset_amount": self.get_validated_input(
-                "Enter initial asset amount",
-                self.validator.validate_non_negative_float,
-                default="0.0"
-            ),
-            "initial_cost_basis": self.get_validated_input(
-                "Enter initial cost basis",
-                self.validator.validate_non_negative_float,
-                default="0.0"
-            ),
+            "initial_asset_amount": initial_asset_amount,
+            "initial_cost_basis": initial_cost_basis,
             "trades": [],
-            "current_cost_basis": self.get_validated_input(
-                "Enter current cost basis",
-                self.validator.validate_non_negative_float,
-                default="0.0"
-            ),
-            "current_asset_amount": self.get_validated_input(
-                "Enter current asset amount",
-                self.validator.validate_non_negative_float,
-                default="0.0"
-            ),
-            "current_quote_amount": self.get_validated_input(
-                "Enter current quote amount",
-                self.validator.validate_non_negative_float,
-                default="0.0"
-            ),
-            "current_net_worth": self.get_validated_input(
-                "Enter current net worth",
-                self.validator.validate_non_negative_float,
-                default="0.0"
-            ),
+            "current_cost_basis": initial_cost_basis,
+            "current_asset_amount": initial_asset_amount,
+            "current_quote_amount": current_quote_amount,
+            "current_net_worth": 0.0,
             "last_updated": self.get_optional_input(
                 "Enter portfolio last updated timestamp or press Enter for null",
                 default="null"

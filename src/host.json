@@ -3,7 +3,7 @@
   "logging": {
     "logLevel": {
       "default": "Information",
-      "Function": "Information",
+      "Function": "Debug",
       "Host.Results": "Information",
       "Host.Aggregator": "Information"
     },

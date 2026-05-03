@@ -127,4 +127,3 @@ def timer_function(execution_timer: func.TimerRequest) -> None:
     
     if execution_timer.past_due:
         logging.warning('The timer is running late!')
-        logger.debug(f'Timer was {execution_timer.past_due} seconds late')
