@@ -1,4 +1,4 @@
-from dataclasses import dataclass, fields
+from dataclasses import asdict, dataclass, fields
 
 from algorithm import Algorithm
 from portfolio import Portfolio
@@ -35,3 +35,13 @@ class Schedule:
             if isinstance(v, str) and v.lower() == 'null':
                 filtered[k] = None
         return cls(**filtered)
+
+    def to_dict(self) -> dict:
+        """Convert Schedule instance to a dictionary for JSON serialization."""
+        result = asdict(self)
+        # Ensure nested objects are properly serialized
+        if 'algorithm' in result and isinstance(result['algorithm'], Algorithm):
+            result['algorithm'] = result['algorithm'].to_dict()
+        if 'portfolio' in result and isinstance(result['portfolio'], Portfolio):
+            result['portfolio'] = result['portfolio'].to_dict()
+        return result

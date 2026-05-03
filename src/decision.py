@@ -31,7 +31,7 @@ def create_order(schedule: Schedule, current_price: float, previous_price: float
                 price=current_price,
                 direction="buy",
                 order_type="limit",
-                execution_active=True,
+                execution_active=schedule.buy_and_sell,
                 status="pending"
             )
             return order
@@ -52,7 +52,7 @@ def create_order(schedule: Schedule, current_price: float, previous_price: float
                 price=current_price,
                 direction="sell",
                 order_type="limit",
-                execution_active=True,
+                execution_active=schedule.buy_and_sell,
                 status="pending"
             )
             return order
@@ -71,7 +71,7 @@ def create_order(schedule: Schedule, current_price: float, previous_price: float
                 price=current_price,
                 direction="buy",
                 order_type="limit",
-                execution_active=True,
+                execution_active=schedule.buy_and_sell,
                 status="pending"
             )
             return order
@@ -91,7 +91,7 @@ def create_order(schedule: Schedule, current_price: float, previous_price: float
                 price=current_price,
                 direction="sell",
                 order_type="limit",
-                execution_active=True,
+                execution_active=schedule.buy_and_sell,
                 status="pending"
             )
             return order

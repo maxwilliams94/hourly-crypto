@@ -35,7 +35,7 @@ def make_schedule(schedule_interval: str = "1H", last_execution: str = None) -> 
         initial_asset_amount=0.0, initial_cost_basis=0.0,
         trades=[],
         current_cost_basis=40000.0, current_asset_amount=0.1,
-        current_quote_amount=1000.0, current_net_worth=5000.0,
+        current_quote_amount=1000.0, cost_basis_value=4000.0, market_value=4000.0,
         last_updated="2024-01-01T00:00:00",
     )
     return Schedule(

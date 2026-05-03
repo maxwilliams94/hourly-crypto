@@ -1,5 +1,5 @@
 import logging
-from dataclasses import dataclass, fields
+from dataclasses import asdict, dataclass, fields
 from typing import List, Tuple
 
 @dataclass
@@ -63,6 +63,7 @@ class Algorithm:
     @classmethod
     def from_dict(cls, data: dict) -> 'Algorithm':
         known = {f.name for f in fields(cls)}
+        filtered = {k: v for k, v in data.items() if k in known}
         for key in known:
             if key not in filtered:
                 filtered[key] = None
@@ -70,5 +71,9 @@ class Algorithm:
             if isinstance(v, str) and v.lower() == 'null':
                 filtered[k] = None
         return cls(**{k: v for k, v in data.items() if k in known})
+
+    def to_dict(self) -> dict:
+        """Convert Algorithm instance to a dictionary for JSON serialization."""
+        return asdict(self)
 
 

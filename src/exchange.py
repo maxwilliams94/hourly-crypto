@@ -74,7 +74,7 @@ def update_trade(trade: Trade) -> Tuple[bool, Trade]:
 def execute_order(order: Order) -> Trade:
     if not order.execution_active or dry_trading():
         logging.info(f"Dry trading enabled or order not active for execution. Simulating trade execution for order: {order}")
-        return Trade(
+        would_be_trade = Trade(
             id=str(uuid4()),
             exchange_id="simulated",
             asset=order.asset,
@@ -88,6 +88,8 @@ def execute_order(order: Order) -> Trade:
             last_updated=datetime.datetime.now().isoformat(),
             fee=None,
         )
+        logging.info("Simulated trade: {}".format(would_be_trade))
+        return None
     if order.exchange == "coinbase":
         return cb_place_order(order)
     elif order.exchange == "test":

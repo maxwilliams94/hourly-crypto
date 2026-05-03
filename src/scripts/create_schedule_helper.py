@@ -67,7 +67,7 @@ class ScheduleValidator:
         """Validate and normalize boolean value."""
         val_lower = value.lower().strip()
         if val_lower not in ["true", "false"]:
-            raise ValueError("Must be 'true' or 'false'")
+            raise ValueError("Must be true or 'false'")
         return val_lower == "true"
 
     @staticmethod
@@ -236,6 +236,11 @@ class ScheduleCreator:
             self.validator.validate_non_negative_float,
             default="0.0"
         )
+        initial_quote_amount = self.get_validated_input(
+            "Enter initial quote amount",
+            self.validator.validate_non_negative_float,
+            default="0.0"
+        )
         current_quote_amount = self.get_validated_input(
             "Enter current quote amount",
             self.validator.validate_non_negative_float,
@@ -248,11 +253,13 @@ class ScheduleCreator:
             "exchange": exchange,
             "initial_asset_amount": initial_asset_amount,
             "initial_cost_basis": initial_cost_basis,
+            "initial_quote_amount": initial_quote_amount,
             "trades": [],
             "current_cost_basis": initial_cost_basis,
             "current_asset_amount": initial_asset_amount,
             "current_quote_amount": current_quote_amount,
-            "current_net_worth": 0.0,
+            "cost_basis_value": initial_asset_amount * initial_cost_basis,
+            "market_value": 0.0,  # Will be updated when current price is fetched
             "last_updated": self.get_optional_input(
                 "Enter portfolio last updated timestamp or press Enter for null",
                 default="null"
@@ -358,14 +365,14 @@ class ScheduleCreator:
             filepath += ".json"
         
         # Ensure parent directory exists
-        path = Path(filepath)
+        path = Path(filepath).expanduser()
         path.parent.mkdir(parents=True, exist_ok=True)
         
         try:
-            with open(filepath, "w") as f:
+            with open(path, "w") as f:
                 f.write(self.format_json())
-            print(f"✓ Schedule saved to: {filepath}\n")
-            return filepath
+            print(f"✓ Schedule saved to: {path}\n")
+            return str(path)
         except IOError as e:
             print(f"❌ Error saving file: {e}\n")
             return None

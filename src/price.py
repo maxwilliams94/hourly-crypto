@@ -22,3 +22,10 @@ class Price:
             if isinstance(v, str) and v.lower() == 'null':
                 filtered[k] = None
         return cls(**filtered)
+
+    def __sub__(self, other):
+        if not isinstance(other, Price):
+            return NotImplemented
+        if self.asset != other.asset or self.quote != other.quote:
+            raise ValueError("Cannot compare prices with different asset/quote/exchange")
+        return self.price - other.price

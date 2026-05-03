@@ -50,7 +50,7 @@ def price_client() -> CosmosClient:
 
 def get_active_schedules() -> List[Schedule]:
     return [Schedule.from_dict(item) for item in schedule_client().query_items(
-        query="SELECT * FROM c WHERE c.active = 'true'",
+        query="SELECT * FROM c WHERE c.active = true",
         enable_cross_partition_query=True)]
 
 
@@ -58,7 +58,7 @@ def upsert_schedule(schedule: Schedule) -> None:
     logging.debug(f'Upserting schedule: {schedule}')
     if schedule.id is None:
         schedule.id = str(uuid4())
-    schedule_client().upsert_item(schedule.__dict__)
+    schedule_client().upsert_item(schedule.to_dict())
 
 
 def persist_price(price: Price) -> None:
@@ -70,10 +70,10 @@ def persist_price(price: Price) -> None:
 
 def get_prices(asset: str, quote: str, schedule: str, exchange: str, max_items: int = None) -> List[Price]:
     if max_items is None:
-        query="SELECT * FROM c WHERE c.asset = @asset AND c.quote = @quote AND c.active = 'true' AND c.schedule = @schedule AND c.exchange = @exchange ORDER BY c.timestamp DESC"
+        query="SELECT * FROM c WHERE c.asset = @asset AND c.quote = @quote AND c.active = true AND c.schedule = @schedule AND c.exchange = @exchange ORDER BY c.timestamp DESC"
     else: 
-        query=f"SELECT TOP {max_items} * FROM c WHERE c.asset = @asset AND c.quote = @quote AND c.active = 'true' AND c.schedule = @schedule AND c.exchange = @exchange ORDER BY c.timestamp DESC"
-    return [Price(**price) for price in price_client().query_items(
+        query=f"SELECT TOP {max_items} * FROM c WHERE c.asset = @asset AND c.quote = @quote AND c.active = true AND c.schedule = @schedule AND c.exchange = @exchange ORDER BY c.timestamp DESC"
+    return [Price.from_dict(price) for price in price_client().query_items(
         query=query,
         parameters=[
             {"name": "@asset", "value": asset},

@@ -3,7 +3,7 @@ Unit tests for the Portfolio and Trade dataclasses (portfolio.py).
 """
 
 import pytest
-from portfolio import Trade, Portfolio, update_portfolio, EXCHANGE_FEE_RATES
+from portfolio import Trade, Portfolio, update_portfolio_trades, EXCHANGE_FEE_RATES
 
 
 def make_trade(**overrides) -> Trade:
@@ -85,7 +85,8 @@ def make_portfolio(**overrides) -> Portfolio:
         current_cost_basis=0.0,
         current_asset_amount=0.0,
         current_quote_amount=0.0,
-        current_net_worth=0.0,
+        cost_basis_value=0.0,
+        market_value=0.0,
         last_updated=None,
     )
     defaults.update(overrides)
@@ -113,35 +114,35 @@ def make_filled_trade(**overrides) -> Trade:
 
 
 # ---------------------------------------------------------------------------
-# update_portfolio tests
+# update_portfolio_trades tests
 # ---------------------------------------------------------------------------
 
-class TestUpdatePortfolio:
+class TestUpdatePortfolioTrades:
 
     # -- Skip conditions -----------------------------------------------------
 
     def test_returns_false_for_none_portfolio(self):
-        assert update_portfolio(None) is False
+        assert update_portfolio_trades(None) is False
 
     def test_no_trades_no_update(self):
         portfolio = make_portfolio()
-        assert update_portfolio(portfolio) is False
+        assert update_portfolio_trades(portfolio) is False
 
     def test_no_filled_trades_skips_update(self):
         open_trade = make_filled_trade(status="open", last_updated="2024-06-01T12:00:00")
         portfolio = make_portfolio(trades=[open_trade])
-        assert update_portfolio(portfolio) is False
+        assert update_portfolio_trades(portfolio) is False
 
     def test_no_new_filled_trades_since_last_update_skips(self):
         # Trade last_updated is before portfolio.last_updated
         trade = make_filled_trade(last_updated="2024-01-01T00:00:00")
         portfolio = make_portfolio(trades=[trade], last_updated="2024-06-01T00:00:00")
-        assert update_portfolio(portfolio) is False
+        assert update_portfolio_trades(portfolio) is False
 
     def test_cancelled_trade_not_counted(self):
         trade = make_filled_trade(status="cancelled", last_updated="2024-06-01T12:00:00")
         portfolio = make_portfolio(trades=[trade])
-        assert update_portfolio(portfolio) is False
+        assert update_portfolio_trades(portfolio) is False
 
     # -- Basic buy -----------------------------------------------------------
 
@@ -150,7 +151,7 @@ class TestUpdatePortfolio:
         trade = make_filled_trade(amount=0.5, price=40000.0, direction="buy", fee=0.0)
         portfolio = make_portfolio(initial_quote_amount=20000.0, trades=[trade])
 
-        result = update_portfolio(portfolio)
+        result = update_portfolio_trades(portfolio)
 
         assert result is True
         assert portfolio.current_asset_amount == pytest.approx(0.5)
@@ -168,7 +169,7 @@ class TestUpdatePortfolio:
             trades=[trade],
         )
 
-        result = update_portfolio(portfolio)
+        result = update_portfolio_trades(portfolio)
 
         assert result is True
         assert portfolio.current_asset_amount == pytest.approx(1.0)
@@ -185,7 +186,7 @@ class TestUpdatePortfolio:
                                fee=0.0)
         portfolio = make_portfolio(initial_quote_amount=50000.0, trades=[t1, t2])
 
-        update_portfolio(portfolio)
+        update_portfolio_trades(portfolio)
 
         assert portfolio.current_asset_amount == pytest.approx(1.5)
         assert portfolio.current_cost_basis == pytest.approx((10000.0 + 40000.0) / 1.5)
@@ -204,7 +205,7 @@ class TestUpdatePortfolio:
             trades=[trade],
         )
 
-        update_portfolio(portfolio)
+        update_portfolio_trades(portfolio)
 
         assert portfolio.current_asset_amount == pytest.approx(0.5)
         assert portfolio.current_cost_basis == pytest.approx(40000.0)  # unchanged
@@ -231,7 +232,7 @@ class TestUpdatePortfolio:
             trades=[t_buy1, t_buy2, t_sell],
         )
 
-        update_portfolio(portfolio)
+        update_portfolio_trades(portfolio)
 
         assert portfolio.current_asset_amount == pytest.approx(1.0)
         assert portfolio.current_cost_basis == pytest.approx(40000.0)
@@ -243,31 +244,41 @@ class TestUpdatePortfolio:
     def test_last_updated_set_on_successful_update(self):
         trade = make_filled_trade()
         portfolio = make_portfolio(trades=[trade])
-        update_portfolio(portfolio)
+        update_portfolio_trades(portfolio)
         assert portfolio.last_updated is not None
 
     def test_update_runs_when_portfolio_never_updated_and_has_filled_trade(self):
         # last_updated is None and there is a filled trade → should update
         trade = make_filled_trade()
         portfolio = make_portfolio(trades=[trade], last_updated=None)
-        assert update_portfolio(portfolio) is True
+        assert update_portfolio_trades(portfolio) is True
 
     def test_update_runs_when_trade_is_newer_than_last_updated(self):
         trade = make_filled_trade(last_updated="2024-06-02T00:00:00")
         portfolio = make_portfolio(trades=[trade], last_updated="2024-06-01T00:00:00")
-        assert update_portfolio(portfolio) is True
+        assert update_portfolio_trades(portfolio) is True
+
+    def test_update_handles_mixed_naive_and_aware_last_updated(self):
+        trade = make_filled_trade(last_updated="2024-06-01T12:30:00")
+        portfolio = make_portfolio(
+            trades=[trade],
+            last_updated="2024-06-01T12:00:00+00:00",
+        )
+
+        assert update_portfolio_trades(portfolio) is True
 
     # -- initial_quote_amount field ------------------------------------------
 
-    def test_initial_quote_amount_defaults_to_none(self):
+    def test_initial_quote_amount_defaults_to_zero(self):
         portfolio = make_portfolio()
         portfolio_no_quote = Portfolio(
             asset="BTC", quote="USD", exchange="coinbase",
             initial_asset_amount=0.0, initial_cost_basis=0.0,
             trades=[], current_cost_basis=0.0, current_asset_amount=0.0,
-            current_quote_amount=0.0, current_net_worth=0.0, last_updated=None,
+            current_quote_amount=0.0, cost_basis_value=0.0, market_value=0.0, last_updated=None,
         )
-        assert portfolio_no_quote.initial_quote_amount is None
+        assert portfolio.initial_quote_amount == pytest.approx(0.0)
+        assert portfolio_no_quote.initial_quote_amount == pytest.approx(0.0)
 
     def test_from_dict_accepts_initial_quote_amount(self):
         data = {
@@ -276,7 +287,7 @@ class TestUpdatePortfolio:
             "initial_quote_amount": 5000.0,
             "trades": [], "current_cost_basis": 30000.0,
             "current_asset_amount": 1.0, "current_quote_amount": 5000.0,
-            "current_net_worth": 35000.0, "last_updated": None,
+            "cost_basis_value": 30000.0, "market_value": 30000.0, "last_updated": None,
         }
         portfolio = Portfolio.from_dict(data)
         assert portfolio.initial_quote_amount == pytest.approx(5000.0)
@@ -287,10 +298,10 @@ class TestUpdatePortfolio:
             "initial_asset_amount": 1.0, "initial_cost_basis": 30000.0,
             "trades": [], "current_cost_basis": 30000.0,
             "current_asset_amount": 1.0, "current_quote_amount": 0.0,
-            "current_net_worth": 30000.0, "last_updated": None,
+            "cost_basis_value": 30000.0, "market_value": 30000.0, "last_updated": None,
         }
         portfolio = Portfolio.from_dict(data)
-        assert portfolio.initial_quote_amount is None
+        assert portfolio.initial_quote_amount == pytest.approx(0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -309,7 +320,7 @@ class TestFees:
         trade = make_filled_trade(amount=0.5, price=40000.0, direction="buy", fee=None)
         portfolio = make_portfolio(initial_quote_amount=25000.0, trades=[trade])
 
-        update_portfolio(portfolio)
+        update_portfolio_trades(portfolio)
 
         trade_cost = 0.5 * 40000.0
         fee = trade_cost * EXCHANGE_FEE_RATES["coinbase"]
@@ -327,7 +338,7 @@ class TestFees:
             trades=[trade],
         )
 
-        update_portfolio(portfolio)
+        update_portfolio_trades(portfolio)
 
         trade_cost = 0.5 * 50000.0
         fee = trade_cost * EXCHANGE_FEE_RATES["coinbase"]
@@ -339,7 +350,7 @@ class TestFees:
         trade = make_filled_trade(amount=0.5, price=40000.0, direction="buy", fee=explicit_fee)
         portfolio = make_portfolio(initial_quote_amount=25000.0, trades=[trade])
 
-        update_portfolio(portfolio)
+        update_portfolio_trades(portfolio)
 
         trade_cost = 0.5 * 40000.0
         assert portfolio.current_quote_amount == pytest.approx(25000.0 - trade_cost - explicit_fee)
@@ -349,7 +360,7 @@ class TestFees:
         trade = make_filled_trade(amount=0.5, price=40000.0, direction="buy", fee=0.0)
         portfolio = make_portfolio(initial_quote_amount=20000.0, trades=[trade])
 
-        update_portfolio(portfolio)
+        update_portfolio_trades(portfolio)
 
         trade_cost = 0.5 * 40000.0
         assert portfolio.current_quote_amount == pytest.approx(20000.0 - trade_cost)  # no fee
@@ -362,7 +373,7 @@ class TestFees:
         )
         portfolio = make_portfolio(initial_quote_amount=30000.0, trades=[trade])
 
-        update_portfolio(portfolio)
+        update_portfolio_trades(portfolio)
 
         assert portfolio.current_quote_amount == pytest.approx(0.0)  # 30 000 - 30 000 - 0
 
@@ -371,7 +382,7 @@ class TestFees:
         trade = make_filled_trade(amount=0.5, price=40000.0, direction="buy", fee=None)
         portfolio = make_portfolio(initial_quote_amount=25000.0, trades=[trade])
 
-        update_portfolio(portfolio)
+        update_portfolio_trades(portfolio)
 
         assert portfolio.current_asset_amount == pytest.approx(0.5)
         assert portfolio.current_cost_basis == pytest.approx(40000.0)

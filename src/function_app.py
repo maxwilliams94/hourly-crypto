@@ -9,7 +9,7 @@ from scheduling import get_schedules, is_ready_for_next_execution, Schedule, upd
 from exchange import get_current_price, execute_order, check_exchange_connectivity, update_trade
 from prices import get_previous_price, save_price
 from order import Order
-from portfolio import Trade, update_portfolio
+from portfolio import Trade, update_portfolio_trades, update_portfolio_value
 from price import Price
 from decision import create_order
 
@@ -85,8 +85,18 @@ def timer_function(execution_timer: func.TimerRequest) -> None:
             update_schedule(schedule)
             logger.debug(f'Schedule updated due to trade status changes')
 
-        if schedule.portfolio and update_portfolio(schedule.portfolio):
+        if schedule.portfolio and update_portfolio_trades(schedule.portfolio):
             logger.info(f"Portfolio updated for schedule: {schedule.id}")
+            update_schedule(schedule)
+
+        # Fetch current price early so we can update portfolio value
+        logger.debug(f'Fetching current price for {schedule.asset}/{schedule.quote}')
+        current_price: Price = get_current_price(schedule.asset, schedule.quote, schedule.exchange)
+        
+        # Update portfolio with current market value
+        if schedule.portfolio and current_price is not None:
+            update_portfolio_value(schedule.portfolio, current_price.price)
+            logger.debug(f'Portfolio value updated with current price')
             update_schedule(schedule)
 
         is_ready = is_ready_for_next_execution(schedule, now)
@@ -95,8 +105,7 @@ def timer_function(execution_timer: func.TimerRequest) -> None:
             continue
         else:
             logger.info(f"Executing scheduled task for schedule: {schedule.id}")
-            logger.debug(f'Fetching current and previous prices for {schedule.asset}/{schedule.quote}')
-            current_price: Price = get_current_price(schedule.asset, schedule.quote, schedule.exchange)
+            logger.debug(f'Fetching previous price for {schedule.asset}/{schedule.quote}')
             previous_price: Price = get_previous_price(schedule.asset, schedule.quote, schedule.schedule, schedule.exchange)
             if schedule.algorithm is not None:
                 is_valid, _ = schedule.algorithm.validate()
@@ -106,23 +115,23 @@ def timer_function(execution_timer: func.TimerRequest) -> None:
                         current_price.schedule = schedule.schedule
                         save_price(current_price)
                     continue
-            order: Order = create_order(schedule, current_price, previous_price)
+            order: Order = create_order(schedule, current_price.price, previous_price.price)
             logger.debug(f'Order creation result: {order}')
             if order is not None:
                 logging.info(f"Generated order: {order}")
                 trade: Trade = execute_order(order)
-                logger.debug(f'Trade execution result: {trade}')
                 if trade is not None:
                     logging.info(f"Executed trade: {trade}")
                     schedule.portfolio.trades.append(trade)
             else:
                 logging.info(f"No order generated for schedule: {schedule}")
-                register_execution(schedule, now)
         if (current_price is not None):
             current_price.schedule = schedule.schedule
             logger.debug(f'Persisting price data: {current_price}')
             save_price(current_price)
-            
+    
+        logging.debug(f'Updating last execution time for schedule: {schedule.id}')
+        register_execution(schedule, now)
     logger.debug('Schedule processing loop completed')
     
     if execution_timer.past_due:

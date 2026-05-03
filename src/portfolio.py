@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass, fields
+from dataclasses import asdict, dataclass, fields
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
@@ -21,10 +21,13 @@ class Portfolio:
     current_cost_basis: float
     current_asset_amount: float
     current_quote_amount: float
-    current_net_worth: float
+    cost_basis_value: float
+    market_value: float
     last_updated: str
-    # Optional initial quote allocation (fiat budget pre-allocated for buying)
-    initial_quote_amount: Optional[float] = None
+    # Initial quote allocation (fiat budget pre-allocated for buying)
+    initial_quote_amount: float = 0.0
+    # Current market price per unit (set when price is fetched)
+    current_price: float = 0.0
 
     @classmethod
     def from_dict(cls, data: dict) -> 'Portfolio':
@@ -35,7 +38,17 @@ class Portfolio:
         for k, v in list(filtered.items()):
             if isinstance(v, str) and v.lower() == 'null':
                 filtered[k] = None
+        if filtered.get('initial_quote_amount') is None:
+            filtered['initial_quote_amount'] = 0.0
         return cls(**filtered)
+
+    def to_dict(self) -> dict:
+        """Convert Portfolio instance to a dictionary for JSON serialization."""
+        result = asdict(self)
+        # Ensure trades are properly serialized
+        if 'trades' in result and result['trades']:
+            result['trades'] = [t.to_dict() if isinstance(t, Trade) else t for t in result['trades']]
+        return result
 
 @dataclass
 class Trade:
@@ -71,8 +84,22 @@ class Trade:
     def is_filled(self):
         return self.status == "filled"
 
+    def to_dict(self) -> dict:
+        """Convert Trade instance to a dictionary for JSON serialization."""
+        return asdict(self)
 
-def update_portfolio(portfolio: Portfolio) -> bool:
+
+def _parse_iso_utc(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+
+    parsed = datetime.fromisoformat(value)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def update_portfolio_trades(portfolio: Portfolio) -> bool:
     """
     Recalculate portfolio cost basis and amounts from initial values and all
     filled trades, using the average cost method.
@@ -86,20 +113,21 @@ def update_portfolio(portfolio: Portfolio) -> bool:
         return False
 
     filled_trades = [t for t in (portfolio.trades or []) if t.is_filled()]
+    
+    # If there are no filled trades at all, nothing to update
+    if not filled_trades:
+        return False
 
     # Determine whether there is anything new to process
     if portfolio.last_updated is not None:
-        last_updated_dt = datetime.fromisoformat(portfolio.last_updated)
+        last_updated_dt = _parse_iso_utc(portfolio.last_updated)
         new_filled = [
             t for t in filled_trades
             if t.last_updated is not None
-            and datetime.fromisoformat(t.last_updated) > last_updated_dt
+            and _parse_iso_utc(t.last_updated) > last_updated_dt
         ]
         if not new_filled:
             return False
-    elif not filled_trades:
-        # Portfolio has never been updated and there are no filled trades
-        return False
 
     # Accumulate from initial holdings
     total_amount: float = portfolio.initial_asset_amount or 0.0
@@ -138,3 +166,25 @@ def update_portfolio(portfolio: Portfolio) -> bool:
     portfolio.last_updated = datetime.now(timezone.utc).isoformat()
 
     return True
+
+
+def update_portfolio_value(portfolio: Portfolio, current_price: float) -> None:
+    """
+    Update portfolio with current market price and recalculate portfolio values.
+    
+    Sets:
+    - current_price: The current market price per unit
+    - cost_basis_value: Total cost basis value (current_asset_amount * current_cost_basis)
+    - market_value: Current market value (current_asset_amount * current_price)
+    
+    Args:
+        portfolio: Portfolio instance to update
+        current_price: Current market price per unit
+    """
+    if portfolio is None or current_price is None:
+        return
+    
+    portfolio.current_price = current_price
+    portfolio.cost_basis_value = portfolio.current_asset_amount * portfolio.current_cost_basis
+    portfolio.market_value = portfolio.current_asset_amount * current_price
+    portfolio.last_updated = datetime.now(timezone.utc).isoformat()
