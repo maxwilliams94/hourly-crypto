@@ -482,6 +482,7 @@ def place_order(
         timestamp=now,
         status="pending",
         last_updated=now,
+        fee=None,
     )
 
 def map_coinbase_status_to_standard(coinbase_status: str) -> str:
@@ -528,19 +529,24 @@ def map_coinbase_status_to_standard(coinbase_status: str) -> str:
     return standard_status
 
 
-def get_order_status(
+def get_order_details(
     order_id: str,
     api_base_url: Optional[str] = None
-) -> str:
+) -> Dict[str, Any]:
     """
-    Get the status of an order from Coinbase API using its order ID.
+    Retrieve full order details from Coinbase API, including status and fees.
     
     Args:
         order_id: The Coinbase order ID
         api_base_url: Override default API base URL (for testing)
         
     Returns:
-        Standardized Trade status string (pending, open, filled, cancelled, or rejected)
+        Dictionary containing order details with keys:
+        - status: Standardized Trade status string
+        - filled_size: Amount of base asset filled
+        - average_filled_price: Average price paid per unit
+        - total_fees: Total fees charged in quote currency (or None if not available)
+        - raw_order: Full order response from Coinbase API
         
     Raises:
         ValueError: If order_id is invalid
@@ -569,28 +575,59 @@ def get_order_status(
     
     # Make API request
     url = f"{api_base_url}{request_path}"
-    logging.debug(f"Fetching order status for order ID: {order_id}")
+    logging.debug(f"Fetching order details for order ID: {order_id}")
     
     response = requests.get(url, headers=headers, timeout=10)
     response.raise_for_status()
     
     order = response.json()
     
-    # Extract key order information for logging
-    order_id_resp = order.get("order", {}).get("order_id", order_id)
-    product_id = order.get("order", {}).get("product_id", "UNKNOWN")
-    coinbase_status = order.get("order", {}).get("status", "UNKNOWN")
-    side = order.get("order", {}).get("side", "UNKNOWN")
-    filled_size = order.get("order", {}).get("filled_size", "0")
+    # Extract order information
+    order_info = order.get("order", {})
+    order_id_resp = order_info.get("order_id", order_id)
+    product_id = order_info.get("product_id", "UNKNOWN")
+    coinbase_status = order_info.get("status", "UNKNOWN")
+    side = order_info.get("side", "UNKNOWN")
+    filled_size = order_info.get("filled_size", "0")
+    average_filled_price = order_info.get("average_filled_price", None)
+    total_fees = order_info.get("total_fees", None)
     
-    logging.info(f"Order status - ID: {order_id_resp}, Product: {product_id}, Coinbase Status: {coinbase_status}, "
-                f"Side: {side}, Filled Size: {filled_size}")
+    logging.info(f"Order details - ID: {order_id_resp}, Product: {product_id}, Coinbase Status: {coinbase_status}, "
+                f"Side: {side}, Filled Size: {filled_size}, Total Fees: {total_fees}")
     logging.debug(f"Full order response: {json.dumps(order, indent=2)}")
     
     # Map Coinbase status to standardized status
     standard_status = map_coinbase_status_to_standard(coinbase_status)
     
-    return standard_status
+    return {
+        "status": standard_status,
+        "filled_size": filled_size,
+        "average_filled_price": average_filled_price,
+        "total_fees": total_fees,
+        "raw_order": order,
+    }
+
+
+def get_order_status(
+    order_id: str,
+    api_base_url: Optional[str] = None
+) -> str:
+    """
+    Get the status of an order from Coinbase API using its order ID.
+    
+    Args:
+        order_id: The Coinbase order ID
+        api_base_url: Override default API base URL (for testing)
+        
+    Returns:
+        Standardized Trade status string (pending, open, filled, cancelled, or rejected)
+        
+    Raises:
+        ValueError: If order_id is invalid
+        requests.HTTPError: If API request fails
+    """
+    details = get_order_details(order_id, api_base_url)
+    return details["status"]
 
 
 def get_current_price(

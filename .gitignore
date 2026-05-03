@@ -630,3 +630,6 @@ src/local.settings.json
 
 # MacOS
 .DS_Store
+
+Azure Functions/local
+.azurite/

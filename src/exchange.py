@@ -1,5 +1,6 @@
 import datetime
 import logging
+from dataclasses import replace
 from os import environ
 from typing import Tuple, Dict, Any
 from uuid import uuid4
@@ -9,7 +10,7 @@ from portfolio import Trade
 from price import Price
 
 from exchanges.coinbase import get_current_price as cb_get_current_price
-from exchanges.coinbase import get_order_status as cb_get_order_status
+from exchanges.coinbase import get_order_details as cb_get_order_details
 from exchanges.coinbase import place_order as cb_place_order
 from exchanges.coinbase import verify_coinbase_connection as cb_verify_connection
 
@@ -25,26 +26,49 @@ def get_current_price(asset: str, quote: str, exchange: str) -> Price:
         return None
 
 
-def get_trade_status(trade: Trade) -> Tuple[bool, Trade]:
+def update_trade(trade: Trade) -> Tuple[bool, Trade]:
     """
-    Get the status of an trade. Uses the exchange id
+    Update trade information from the exchange, including status and fees.
+    Queries the exchange for current trade details and returns an updated copy
+    of the trade with new status and fee information.
     
     Args:
-        trade
-        exchange: The exchange name (e.g., "coinbase")
+        trade: The Trade object to update
         
+    Returns:
+        Tuple of (changed, updated_trade) where:
+        - changed: bool indicating if status or fee changed
+        - updated_trade: New Trade instance with updated status and fee
     """
     if trade.exchange == "coinbase":
-        status = cb_get_order_status(trade.exchange_id)
+        details = cb_get_order_details(trade.exchange_id)
+        new_status = details["status"]
+        new_fee = details.get("total_fees")
+        
+        # Parse total_fees to float if it's a string
+        if new_fee is not None and isinstance(new_fee, str):
+            try:
+                new_fee = float(new_fee)
+            except (ValueError, TypeError):
+                new_fee = None
     elif trade.exchange == "test":
-        status = "filled"
+        new_status = "filled"
+        new_fee = trade.fee
     else:
-        status = None
+        new_status = None
+        new_fee = trade.fee
 
-    changed = status != trade.status
-    trade.status = status
-    trade.last_updated = datetime.datetime.now().isoformat()
-    return changed, trade
+    changed = new_status != trade.status or new_fee != trade.fee
+    
+    # Return a new Trade instance with updated values
+    updated_trade = replace(
+        trade,
+        status=new_status,
+        fee=new_fee,
+        last_updated=datetime.datetime.now().isoformat()
+    )
+    
+    return changed, updated_trade
 
 
 def execute_order(order: Order) -> Trade:
@@ -61,7 +85,8 @@ def execute_order(order: Order) -> Trade:
             direction=order.direction,
             timestamp=datetime.datetime.now().isoformat(),
             status="pending",
-            last_updated=datetime.datetime.now().isoformat()
+            last_updated=datetime.datetime.now().isoformat(),
+            fee=None,
         )
     if order.exchange == "coinbase":
         return cb_place_order(order)
@@ -77,7 +102,8 @@ def execute_order(order: Order) -> Trade:
             direction=order.direction,
             timestamp=datetime.datetime.now().isoformat(),
             status="pending",
-            last_updated=datetime.datetime.now().isoformat()
+            last_updated=datetime.datetime.now().isoformat(),
+            fee=None,
         )
     else:
         return None

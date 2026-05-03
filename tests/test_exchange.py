@@ -48,6 +48,7 @@ def make_trade(**overrides) -> Trade:
         timestamp="2024-01-01T00:00:00",
         status="open",
         last_updated="2024-01-01T00:00:00",
+        fee=None,
     )
     defaults.update(overrides)
     return Trade(**defaults)
@@ -160,31 +161,45 @@ class TestExecuteOrder:
 
 
 # ---------------------------------------------------------------------------
-# get_trade_status
+# update_trade
 # ---------------------------------------------------------------------------
 
-class TestGetTradeStatus:
+class TestUpdateTrade:
     def test_test_exchange_always_returns_filled(self):
         trade = make_trade(exchange="test", status="open")
-        changed, updated = exchange_module.get_trade_status(trade)
+        changed, updated = exchange_module.update_trade(trade)
         assert updated.status == "filled"
         assert changed is True
 
     def test_no_change_when_already_filled(self):
         trade = make_trade(exchange="test", status="filled")
-        changed, updated = exchange_module.get_trade_status(trade)
+        changed, updated = exchange_module.update_trade(trade)
         assert changed is False
         assert updated.status == "filled"
 
     def test_last_updated_is_set(self):
         trade = make_trade(exchange="test", status="open")
-        _, updated = exchange_module.get_trade_status(trade)
+        _, updated = exchange_module.update_trade(trade)
         assert updated.last_updated is not None
 
     def test_coinbase_exchange_delegates_to_coinbase_module(self):
         trade = make_trade(exchange="coinbase", status="open")
-        with patch("exchange.cb_get_order_status", return_value="filled") as mock_cb:
-            changed, updated = exchange_module.get_trade_status(trade)
+        mock_details = {
+            "status": "filled",
+            "filled_size": "1.0",
+            "average_filled_price": "50000.0",
+            "total_fees": "50.0",
+            "raw_order": {},
+        }
+        with patch("exchange.cb_get_order_details", return_value=mock_details) as mock_cb:
+            changed, updated = exchange_module.update_trade(trade)
             mock_cb.assert_called_once()
             assert updated.status == "filled"
+            assert updated.fee == 50.0
             assert changed is True
+
+    def test_fee_updated_from_exchange_details(self):
+        trade = make_trade(exchange="test", status="open", fee=None)
+        changed, updated = exchange_module.update_trade(trade)
+        # For test exchange, fee remains None
+        assert updated.fee is None

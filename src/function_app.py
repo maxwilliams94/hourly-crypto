@@ -6,10 +6,10 @@ from typing import List
 import azure.functions as func
 
 from scheduling import get_schedules, is_ready_for_next_execution, Schedule, update_schedule, register_execution
-from exchange import get_current_price, execute_order, check_exchange_connectivity, get_trade_status
+from exchange import get_current_price, execute_order, check_exchange_connectivity, update_trade
 from prices import get_previous_price, save_price
 from order import Order
-from portfolio import Trade
+from portfolio import Trade, update_portfolio
 from price import Price
 from decision import create_order
 
@@ -69,17 +69,25 @@ def timer_function(execution_timer: func.TimerRequest) -> None:
 
         unfilled_trades = [trade for trade in schedule.portfolio.trades if not trade.is_complete()] if schedule.portfolio else []
         logger.debug(f'Found {len(unfilled_trades)} unfilled trades for this schedule')
-        has_updated = False
+        updated_trades = {}  # Map of old trade id to new trade object
         for unfilled_trade in unfilled_trades:
-            changed, updated_trade = get_trade_status(unfilled_trade)
-            logger.debug(f'Trade status check - Changed: {changed}, Trade ID: {unfilled_trade.id}')
+            changed, updated_trade = update_trade(unfilled_trade)
+            logger.debug(f'Trade update - Changed: {changed}, Trade ID: {unfilled_trade.id}')
             if changed:
-                logging.info(f"Updated trade status: {updated_trade}")
-                has_updated = True
-
-        if has_updated:
+                logging.info(f"Updated trade: {updated_trade}")
+                updated_trades[unfilled_trade.id] = updated_trade
+        
+        if updated_trades:
+            # Update trades in the portfolio with their new versions
+            schedule.portfolio.trades = [
+                updated_trades.get(t.id, t) for t in schedule.portfolio.trades
+            ]
             update_schedule(schedule)
             logger.debug(f'Schedule updated due to trade status changes')
+
+        if schedule.portfolio and update_portfolio(schedule.portfolio):
+            logger.info(f"Portfolio updated for schedule: {schedule.id}")
+            update_schedule(schedule)
 
         is_ready = is_ready_for_next_execution(schedule, now)
         logger.debug(f'Schedule ready for execution: {is_ready}')
